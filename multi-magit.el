@@ -25,7 +25,7 @@
   :link '(url-link "https://github.com/luismbo/multi-magit")
   :group 'magit-extensions)
 
-(defgroup magit-faces nil
+(defgroup multi-magit-faces nil
   "Faces used by Multi-Magit."
   :group 'multi-magit)
 
@@ -175,9 +175,9 @@ merge-base betweenn HEAD and @{upstream}."
               (delete-region (oref target-section start)
                              (1+ (oref target-section end)))
               (insert (propertize (concat "[" repo-name "]")
-                                  'face (if (= arg 0)
-                                            'magit-process-ok
-                                          'magit-process-ng)))
+                                  'font-lock-face (if (= arg 0)
+                                                      'magit-process-ok
+                                                    'magit-process-ng)))
               (insert-buffer-substring process-buf
                                        (oref section start)
                                        (oref section end)))))))))
@@ -317,7 +317,7 @@ Show S if there is at least one staged file."
 
 (defun multi-magit-repolist-column-repo (spec)
   "Insert the identification of the repository."
-  (propertize (cadr (assq :id spec)) 'face 'multi-magit-repolist-repo-face))
+  (propertize (cadr (assq :id spec)) 'font-lock-face 'multi-magit-repolist-repo-face))
 
 (defcustom multi-magit-repolist-columns
   '(("Name"    25 magit-repolist-column-ident nil)
@@ -580,7 +580,7 @@ repositories are displayed."
                          using (hash-value info)
                          collect (cl-destructuring-bind (repos paths last-changed) info
                                    (list (cons branch paths)
-                                         (vector (propertize branch 'face 'magit-branch-local)
+                                         (vector (propertize branch 'font-lock-face 'magit-branch-local)
                                                  last-changed
                                                  (mapconcat 'identity repos ", ")))))))
         (tabulated-list-print)
@@ -606,6 +606,11 @@ repositories are displayed."
   "Face for repository headings."
   :group 'multi-magit-faces)
 
+(defface multi-magit-branch-heading
+  '((t :inherit magit-branch-current))
+  "Face for the current branch in repository headings."
+  :group 'multi-magit-faces)
+
 (defvar multi-magit-repo-header-section-map
   (let ((map (make-sparse-keymap)))
     (define-key map [return] 'magit-status)
@@ -613,11 +618,15 @@ repositories are displayed."
   "Keymap for repository headers.")
 
 (defun multi-magit--insert-repo-heading (repo-name)
-  (let* ((repo (propertize (format " %s " repo-name)
-                           'face 'multi-magit-repo-heading))
+  (let* ((box (face-attribute 'multi-magit-repo-heading :box nil t))
+         ;; The spaces only keep the face's box off the name.
+         (repo (propertize (if (memq box '(nil unspecified))
+                               repo-name
+                             (format " %s " repo-name))
+                           'font-lock-face 'multi-magit-repo-heading))
          (branch (--if-let (magit-get-current-branch)
-                     (propertize it 'face 'magit-branch-current)
-                   (propertize "(detached)" 'face 'warning))))
+                     (propertize it 'font-lock-face 'multi-magit-branch-heading)
+                   (propertize "(detached)" 'font-lock-face 'warning))))
     (magit-insert-heading (propertize (concat repo " " branch)
                                       'keymap
                                       multi-magit-repo-header-section-map))))
@@ -702,11 +711,17 @@ This is the refresh function of `multi-magit-status-mode', which
   (magit-insert-section (multi-magit-toplevel)
     (cl-loop for repo in multi-magit-selected-repositories
              for repo-name in (multi-magit--selected-repo-names)
+             for first = t then nil
              do (let ((default-directory repo)
                       (magit--default-directory repo))
+                  (unless first
+                    ;; In place of the blank line that ends the previous
+                    ;; repository, which belongs to its last section.
+                    (when (looking-back "\n\n" (- (point) 2))
+                      (delete-char -1))
+                    (insert "\n"))
                   (magit-insert-section (multi-magit-status repo)
                     (multi-magit--insert-repo-heading repo-name)
-                    (insert "\n")
                     (magit-run-section-hook 'multi-magit-status-sections-hook))))))
 
 (defun multi-magit--refresh-status (buffer &optional created)
@@ -770,18 +785,18 @@ like to select some using `multi-magit-list-repositories'? ")
            (branch-format (format "%%-%is " (min 25 (/ (window-width) 3)))))
       (magit-insert-heading (format "%s (%d)"
                                     (propertize "Selected repositories"
-                                                'face 'magit-section-heading)
+                                                'font-lock-face 'magit-section-heading)
                                     (length repos)))
       (cl-loop for repo in repos
                for repo-name in repo-names
                do (let ((default-directory repo))
                     (magit-insert-section (multi-magit-repo repo t)
                       (insert (propertize (format path-format repo-name)
-                                          'face 'magit-diff-file-heading))
+                                          'font-lock-face 'magit-diff-file-heading))
                       (insert (format branch-format
                                       (--if-let (magit-get-current-branch)
-                                          (propertize it 'face 'magit-branch-local)
-                                        (propertize "(detached)" 'face 'warning))))
+                                          (propertize it 'font-lock-face 'magit-branch-local)
+                                        (propertize "(detached)" 'font-lock-face 'warning))))
                       (insert (mapconcat
                                'identity
                                (remove nil
